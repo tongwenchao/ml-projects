@@ -3,7 +3,10 @@ import torch.nn as nn
 import numpy as np
 import pandas as pd
 import faiss
+import os
 from pathlib import Path
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 # ── 模型定义 ──────────────────────────────────────────────────
 class TwoTowerV2(nn.Module):
@@ -38,7 +41,7 @@ class TwoTowerV2(nn.Module):
 
 # ── 核心推理类 ────────────────────────────────────────────────
 class Recommender:
-    def __init__(self, data_dir: str, model_path: str):
+    def __init__(self, data_dir: str, model_path: str, onnx_path: str = None):
         data_dir   = Path(data_dir)
         model_path = Path(model_path)
 
@@ -60,7 +63,7 @@ class Recommender:
         # 每个用户看过的电影
         self.watched = ratings.groupby("user_id")["movie_id"].apply(set).to_dict()
 
-        # 加载模型
+        # 加载 PyTorch 模型（item tower 始终用 PyTorch，只跑一次）
         ckpt = torch.load(model_path, map_location="cpu")
         hp   = ckpt["hparams"]
         self.model = TwoTowerV2(n_users=hp["n_users"], n_movies=hp["n_movies"],
@@ -68,7 +71,17 @@ class Recommender:
         self.model.load_state_dict(ckpt["model_state"])
         self.model.eval()
 
-        # 建 Faiss 索引
+        # ONNX Runtime（user tower 热路径）
+        self.ort_sess = None
+        onnx_path = onnx_path or str(data_dir / "user_tower.onnx")
+        if Path(onnx_path).exists():
+            import onnxruntime as ort
+            self.ort_sess = ort.InferenceSession(onnx_path)
+            print(f"user tower: ONNX Runtime ({onnx_path})")
+        else:
+            print("user tower: PyTorch (ONNX not found, fallback)")
+
+        # 建 Faiss 索引（item tower，只跑一次）
         all_idx = torch.arange(len(self.movie2idx))
         with torch.no_grad():
             item_vecs = self.model.get_item_vec(all_idx).numpy().astype("float32")
@@ -79,27 +92,40 @@ class Recommender:
         print(f"Recommender ready — {len(self.user2idx)} users, "
               f"{self.index.ntotal} items in Faiss index")
 
+    def _get_user_vec(self, user_idx: int, gender: float, age: float, occ: int) -> np.ndarray:
+        """返回 shape (1, 32) float32 numpy 数组"""
+        if self.ort_sess is not None:
+            return self.ort_sess.run(["user_vec"], {
+                "user_ids":    np.array([user_idx], dtype=np.int64),
+                "genders":     np.array([int(gender)], dtype=np.int64),
+                "ages":        np.array([int(age)],    dtype=np.int64),
+                "occupations": np.array([occ],         dtype=np.int64),
+            })[0].astype("float32")
+        else:
+            with torch.no_grad():
+                return self.model.get_user_vec(
+                    user_idx = torch.tensor([user_idx]),
+                    gender   = torch.tensor([[gender]]),
+                    age      = torch.tensor([[age]]),
+                    occ      = torch.tensor([occ]),
+                ).numpy().astype("float32")
+
     def recommend(self, user_id: int, top_k: int = 10, recall_k: int = 50):
         if user_id not in self.user2idx:
             return {"error": f"user_id {user_id} not found"}
 
         u = self.users[self.users["user_id"] == user_id].iloc[0]
         gender_val = 0.0 if u["gender"] == "F" else 1.0
-        age_val    = float(u["age"])
-        occ_val    = int(u["occupation"])
 
-        with torch.no_grad():
-            u_vec = self.model.get_user_vec(
-                user_idx = torch.tensor([self.user2idx[user_id]]),
-                gender   = torch.tensor([[gender_val]]),
-                age      = torch.tensor([[age_val]]),
-                occ      = torch.tensor([occ_val]),
-            )
-        u_vec_np = u_vec.numpy().astype("float32")
-        faiss.normalize_L2(u_vec_np)
+        u_vec = self._get_user_vec(
+            user_idx = self.user2idx[user_id],
+            gender   = gender_val,
+            age      = float(u["age"]),
+            occ      = int(u["occupation"]),
+        )
+        faiss.normalize_L2(u_vec)
 
-        # 召回 recall_k，过滤已看，取 top_k
-        scores, indices = self.index.search(u_vec_np, recall_k)
+        scores, indices = self.index.search(u_vec, recall_k)
         watched = self.watched.get(user_id, set())
 
         results = []
