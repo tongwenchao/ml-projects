@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/tongwenchao/ml-projects/progress/**)",
+      "Read(//Users/tongwenchao/ml-projects/recommender/**)"
+    ]
+  }
+}
