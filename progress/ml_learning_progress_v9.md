@@ -17,23 +17,45 @@
 - 项目 C：股票/基金自选池助手 🔄 进行中
 
 ### Phase 2（未开始）：Fine-tuning + 量化蒸馏
-- 平台：本机 MPS + Vast.ai / Lambda Labs（按需租 GPU，约 $1.5/hr A100），前期验证可用 Colab Free/Pro
+- 平台：
+  - 前期验证/代码调试：Google Colab Free / Pro（有会话时长限制，适合快速跑通逻辑）
+  - 正式训练：Vast.ai / Lambda Labs（完整 Linux 环境，SSH + tmux，按小时付费）
+  - 费用参考：Vast.ai RTX 4090 ~$0.3–0.5/hr，A100 ~$1.5–2.5/hr；Lambda Labs A100 80GB ~$1.25/hr；Colab Pro $10/月，Pro+ $50/月
 - SFT / LoRA / QLoRA fine-tune LLM（7B 量级，如 Mistral/Llama）
 - 模型量化：INT8/INT4，bitsandbytes
 - ONNX export + TensorRT 推理加速
 - 知识蒸馏：teacher-student，loss 设计
 
 ### Phase 3（未开始）：对齐 + 多模态
-- 平台：Vast.ai / Lambda Labs + Google Cloud TPU（试用），前期验证可用 Colab Free/Pro
+- 平台：
+  - 前期验证：Google Colab Free / Pro
+  - DPO/RLHF 正式训练：Vast.ai / Lambda Labs
+  - Stable Diffusion fine-tune / ControlNet：直接用 Vast.ai（显存需求高，Colab 不稳定）
+  - CogVideoX fine-tune：Vast.ai（需 40GB+ 显存，Colab 不支持）
+  - TPU 对比实验：Google Colab TPU（免费有 TPU v2 额度）或 Google Cloud TPU（按需付费）
 - DPO / RLHF：偏好对齐，从 DPO 切入（比 RLHF 实现简单）
 - 图像模型：Stable Diffusion fine-tune（DreamBooth / LoRA）+ ControlNet
 - 视频模型：CogVideoX fine-tune（小规模）+ 推理实验
 - TPU 对比实验：同一任务在 GPU vs TPU 上的速度和成本对比
 
+### Phase 3.5（未开始）：分布式训练 PoC
+- 平台：Vast.ai 租 2x 同机 GPU（如 2x RTX 4090，~$0.8–1/hr）
+- 目标：理解分布式训练核心概念，跑通 PyTorch DDP，不做生产级工程化
+- 内容：
+  - `torch.distributed` 初始化（init_process_group、rank、world_size）
+  - `DistributedDataParallel` 包装模型
+  - `DistributedSampler` 数据分片
+  - 梯度在多卡间同步的过程（AllReduce）
+  - 单卡 vs 多卡速度和显存对比实验
+- 不做：多节点跨机器通信、fault tolerance、生产级调度（留 Phase 4）
+- 用已有模型（如 Phase 2/3 fine-tune 过的 LLM）作为训练对象，聚焦分布式机制本身
+
 ### Phase 4（未开始）：大规模训练 + 工程化
-- 平台：视需要开通 AWS（新账号）或 GCP，Claude 届时提供完整 setup 指南
+- 平台：AWS（已有账号，us-west-2）或 GCP，Claude 届时提供完整 setup 指南
+  - 不建议用 Vast.ai：多节点 NCCL 通信不稳定，且缺乏持久化基础设施
+  - 推荐实例：p3.8xlarge（4x V100）或 p4d.24xlarge（8x A100）
 - Continuous pre-training：domain adaptation，数据 pipeline
-- 分布式训练：多 GPU / 多节点
+- 分布式训练：多节点，跨机器通信，fault tolerance
 - MLOps：监控、serving、A/B testing
 - vLLM / TGI 推理框架
 
@@ -307,6 +329,12 @@ streamlit run app.py
 - 技术点：时序特征工程、Learning-to-rank（LambdaRank/ListNet）、定时推理 pipeline
 - 数据源：yfinance（免费）
 
+**后续阶段规划**（已确定，供参考）：
+- Phase 2：Fine-tuning + 量化蒸馏，Colab 验证 + Vast.ai 正式训练
+- Phase 3：对齐 + 多模态，Vast.ai 为主，TPU 实验用 Google Colab TPU / GCP
+- Phase 3.5：分布式训练 PoC，Vast.ai 2x 同机 GPU，跑通 DDP 概念
+- Phase 4：大规模训练 + 工程化，AWS / GCP，不用 Vast.ai
+
 **环境**：MacBook Apple Silicon，conda，mlenv 环境
 - faiss 必须用 conda-forge 版：`conda install -c conda-forge faiss-cpu`
 - KMP_DUPLICATE_LIB_OK=TRUE 已永久写入 conda activate.d
@@ -315,4 +343,4 @@ streamlit run app.py
 - 暂不使用 AWS infrastructure
 - 教学风格：每次只给一个 cell 的代码，跑完看结果再继续，遇到问题用数据验证而不是猜测
 
-完整学习进度文档见附件 `ml_learning_progress_v8.md`。
+完整学习进度文档见附件 `ml_learning_progress_v9.md`。

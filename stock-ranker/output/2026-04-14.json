@@ -1,0 +1,26 @@
+{
+  "date": "2026-04-14",
+  "generated_at": "2026-04-14 22:36:00",
+  "watch_list": [
+    {
+      "ticker": "AMZN",
+      "model_score": 0.20720815658569336
+    },
+    {
+      "ticker": "WFC",
+      "model_score": 0.17481085658073425
+    },
+    {
+      "ticker": "NVDA",
+      "model_score": 0.15905529260635376
+    },
+    {
+      "ticker": "MS",
+      "model_score": 0.14602991938591003
+    },
+    {
+      "ticker": "META",
+      "model_score": 0.10776117444038391
+    }
+  ]
+}
