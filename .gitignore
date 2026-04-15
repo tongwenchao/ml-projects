@@ -33,3 +33,4 @@ env/
 
 # Claude
 .claude/
+llm-inference/models/
