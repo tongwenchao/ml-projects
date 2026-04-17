@@ -33,4 +33,8 @@ env/
 
 # Claude
 .claude/
+
 llm-inference/models/
+
+# Fine-tuned models
+lora-finetune/mistral-qlora-sentiment-adapter/
