@@ -38,3 +38,5 @@ llm-inference/models/
 
 # Fine-tuned models
 lora-finetune/mistral-qlora-sentiment-adapter/
+lora-finetune/mistral-7b-sentiment-gguf/
+lora-finetune/mistral-7b-sentiment-merged/
